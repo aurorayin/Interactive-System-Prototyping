@@ -56,7 +56,7 @@ unsigned long _fpsStartTimeStamp = 0;
 // status bar
 const boolean _drawFrameCount = false; // change to show/hide frame count
 const int DELAY_LOOP_MS = 5;
-const int LOAD_SCREEN_SHOW_MS = 1000;
+const int LOAD_SCREEN_SHOW_MS = 4000;
 
 // variables
 int _spriteIndex = 0;
@@ -81,25 +81,24 @@ class Spike : public Circle {
     }
 };
 
-const int BIRD_HEIGHT = 21;
-const int BIRD_WIDTH = 20;
-const int NUM_PIPES = 3;
+const int NUM_SPIKES = 3;
 
-const int MIN_PIPE_WIDTH = 2;
-const int MAX_PIPE_WIDTH = 15; // in pixels
-const int MIN_PIPE_X_SPACING_DISTANCE = 0; // in pixels
-const int MAX_PIPE_X_SPACING_DISTANCE = 100; // in pixels
+const int MIN_SPIKE_WIDTH = 2;
+const int MAX_SPIKE_WIDTH = 15; // in pixels
+const int MIN_X_SPACING_DISTANCE = 0; // in pixels
+const int MAX_X_SPACING_DISTANCE = 80; // in pixels
 
-int _pipeSpeed = 2;
+int _spikeSpeed = 2;
 int _gravity = 2; // can't apply gravity every frame, apply every X time
 int _points = 0;
 unsigned long _gameOverTimestamp = 0;
 
 int previousMillis = 0;
+int soundThreshold = 521;
 
 const int IGNORE_INPUT_AFTER_GAME_OVER_MS = 500; //ignores input for 500ms after game over
           
-Spike _spikes[NUM_PIPES] = { Spike(0, 0, 0),
+Spike _spikes[NUM_SPIKES] = { Spike(0, 0, 0),
                              Spike(0, 0, 0),
                              Spike(0, 0, 0)
                            };
@@ -174,7 +173,7 @@ void loop() {
 }
 
 void nonGamePlayLoop() {
-  for (int i = 0; i < NUM_PIPES; i++) {
+  for (int i = 0; i < NUM_SPIKES; i++) {
     _spikes[i].draw(_display);
   }
 
@@ -220,10 +219,17 @@ void initializeGameEntities() {
 
   const int minStartXPipeLocation = _display.width() / 2;
   int lastPipeX = minStartXPipeLocation;
-  for (int i = 0; i < NUM_PIPES; i++) {
 
-    int pipeX = lastPipeX + random(MIN_PIPE_X_SPACING_DISTANCE, MAX_PIPE_X_SPACING_DISTANCE);
-    int pipeWidth = random(MIN_PIPE_WIDTH, MAX_PIPE_WIDTH);
+  // reset the vibromotor and leds
+  digitalWrite(VIBROMOTOR_OUTPUT_PIN, LOW);
+  digitalWrite(LED1_PIN, LOW);
+  digitalWrite(LED2_PIN, LOW);
+  digitalWrite(LED3_PIN, LOW);
+
+  for (int i = 0; i < NUM_SPIKES; i++) {
+
+    int pipeX = lastPipeX + random(MIN_X_SPACING_DISTANCE, MAX_X_SPACING_DISTANCE);
+    int pipeWidth = random(MIN_SPIKE_WIDTH, MAX_SPIKE_WIDTH);
 
     _spikes[i].setLocation(pipeX, SCREEN_HEIGHT - pipeWidth/2);
     _spikes[i].setDimensions(pipeWidth, pipeWidth);
@@ -233,6 +239,10 @@ void initializeGameEntities() {
 }
 
 void gamePlayLoop() {
+  // adjust game difficulty based on points
+  _spikeSpeed = 2 + _points / 10;
+  _gravity = 2 + _points / 10;
+
   int buttonVal = digitalRead(BUTTON_INPUT_PIN);
   _ySprite += _gravity;
 
@@ -240,18 +250,18 @@ void gamePlayLoop() {
   Serial.println(soundVal);
   
   // light up LEDs based on sound sensor value
-  if (soundVal > 518) {
+  if (soundVal > soundThreshold) {
     _ySprite -= 8;
     digitalWrite(LED1_PIN, HIGH);
     previousMillis = millis();
   } 
   
-  if (soundVal > 520) {
+  if (soundVal > soundThreshold + 4) {
     digitalWrite(LED2_PIN, HIGH);
     previousMillis = millis();
   } 
   
-  if (soundVal > 525) {
+  if (soundVal > soundThreshold + 4) {
     digitalWrite(LED3_PIN, HIGH);
     previousMillis = millis();
   }
@@ -289,9 +299,9 @@ void gamePlayLoop() {
   // which we will use to reposition pipes that go off the left part of screen
   int xMaxRight = 0;
 
-  // Iterate through pipes and check for collisions and scoring
-  for (int i = 0; i < NUM_PIPES; i++) {
-    _spikes[i].setX(_spikes[i].getX() - _pipeSpeed);
+  // Iterate through spikes and check for collisions and scoring
+  for (int i = 0; i < NUM_SPIKES; i++) {
+    _spikes[i].setX(_spikes[i].getX() - _spikeSpeed);
 
     _spikes[i].draw(_display);
 
@@ -324,6 +334,9 @@ void gamePlayLoop() {
       _gameOverTimestamp = millis();
       _vibroMotorStartTimeStamp = -1;
       digitalWrite(VIBROMOTOR_OUTPUT_PIN, LOW);
+      digitalWrite(LED1_PIN, LOW);
+      digitalWrite(LED2_PIN, LOW);
+      digitalWrite(LED3_PIN, LOW);
     } else {
       _spikes[i].setDrawFill(false);
     }
@@ -332,10 +345,10 @@ void gamePlayLoop() {
   // Check for spikes that have gone off the screen to the left
   // and reset them to off the screen on the right
   xMaxRight = max(xMaxRight, _display.width());
-  for (int i = 0; i < NUM_PIPES; i++) {
+  for (int i = 0; i < NUM_SPIKES; i++) {
     if (_spikes[i].getRight() < 0) {
-      int pipeX = xMaxRight + random(MIN_PIPE_X_SPACING_DISTANCE, MAX_PIPE_X_SPACING_DISTANCE);
-      int pipeWidth = random(MIN_PIPE_WIDTH, MAX_PIPE_WIDTH); 
+      int pipeX = xMaxRight + random(MIN_X_SPACING_DISTANCE, MAX_X_SPACING_DISTANCE);
+      int pipeWidth = random(MIN_SPIKE_WIDTH, MAX_SPIKE_WIDTH); 
 
       _spikes[i].setLocation(pipeX, SCREEN_HEIGHT - pipeWidth/2);
       _spikes[i].setDimensions(pipeWidth, pipeWidth);
